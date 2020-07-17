@@ -13,27 +13,30 @@ import pandas as pd
 import os
 import shutil
 import matplotlib.pyplot as plt
+from imutils import paths
+import random
 
 dataset_path = './dataset'
 
 # Commented out IPython magic to ensure Python compatibility.
 # %%bash
-# rm -rf dataset
 # rm -rf dataset/train/covid/
 # rm -rf dataset/train/normal/
 # rm -rf dataset/test/covid
 # rm -rf dataset/test/normal
+# rm -rf dataset
 # mkdir -p dataset/train/covid
 # mkdir -p dataset/train/normal
 # mkdir -p dataset/test/covid
 # mkdir -p dataset/test/normal
 
-samples = 20
+samples = 10
 
 covid_dataset_path = './images'
 
 df = pd.read_csv("metadata.csv")
 print(df['finding'].value_counts())
+print(df['view'].value_counts())
 print(os.path)
 
 # loop over the rows of the COVID-19 data frame
@@ -162,19 +165,19 @@ train_datagen = ImageDataGenerator(
 test_datagen = ImageDataGenerator(rescale=1./255)
 train_generator = train_datagen.flow_from_directory(
         '/content/dataset/train',
-        target_size=(150, 150),
+        target_size=(224, 224),
         batch_size=32,
         class_mode='binary')
 validation_generator = test_datagen.flow_from_directory(
         '/content/dataset/test',
-        target_size=(150, 150),
+        target_size=(224, 224),
         batch_size=32,
         class_mode='binary')
 
 """Building the CNN"""
 
 model = tf.keras.models.Sequential()
-model.add(tf.keras.layers.Conv2D(64, kernel_size=3, activation='relu', input_shape=[150,150,3]))
+model.add(tf.keras.layers.Conv2D(64, kernel_size=3, activation='relu', input_shape=[224,224,3]))
 model.add(tf.keras.layers.MaxPool2D(pool_size=2, strides=2))
 model.add(tf.keras.layers.Conv2D(64, kernel_size=3, activation='relu'))
 model.add(tf.keras.layers.MaxPool2D(pool_size=2, strides=2))
@@ -183,35 +186,38 @@ model.add(tf.keras.layers.MaxPool2D(pool_size=2, strides=2))
 model.add(tf.keras.layers.Flatten())
 model.add(tf.keras.layers.Dense(units=128, activation='relu'))
 model.add(tf.keras.layers.Dense(units=1, activation='sigmoid'))
+model.summary()
 
 """Building the VGG19 Model"""
 
-basemodel = tf.keras.applications.VGG19(
-    include_top=True,
-    weights=None,
-    input_tensor=tf.keras.layers.Input(shape=(150,150,3)),
-    input_shape=(150, 150, 3),
-    pooling=None,
-    classes = 2,
-    classifier_activation="softmax",
-)
+from tensorflow.keras.applications.vgg19 import VGG19
+from tensorflow.keras.models import Model
+from tensorflow.keras.applications.vgg19 import preprocess_input
+
+base_model = VGG19(weights='imagenet',input_tensor=tf.keras.layers.Input(shape=(224,224,3)), include_top=False)
+end_model = base_model.get_layer('block4_pool').output
+end_model = tf.keras.layers.Flatten()(end_model)
+end_model = tf.keras.layers.Dense(units=128, activation='relu')(end_model)
+end_model = tf.keras.layers.Dense(units=1, activation='softmax')(end_model)
+VGG19model = Model(inputs=base_model.input, outputs=end_model)
+VGG19model.summary()
 
 class MyCallback(tf.keras.callbacks.Callback):
 
   def on_epoch_end(self, epoch, logs={}):
     if logs.get('acc') > 0.80 :
-      print("\n Recahed accuracy above 77% ")
+      print("\n Recahed accuracy above 80% ")
       self.model.stop_training = True
 
 """Fitting your VGG19 Model"""
 
-basemodel.compile(optimizer='adam', loss='binary_crossentropy', metrics=['acc'])
-hist = basemodel.fit(x=train_generator, validation_data=validation_generator, epochs=5, callbacks=[MyCallback()])
+VGG19model.compile(optimizer='adam', loss='binary_crossentropy', metrics=['acc'])
+hist = VGG19model.fit(x=train_generator, validation_data=validation_generator, epochs=10, callbacks=[MyCallback()])
 
 """Fitting your Model"""
 
 model.compile(optimizer='adam', loss='binary_crossentropy', metrics=['acc'])
-hist_model = model.fit(x=train_generator, validation_data=validation_generator, epochs=5, callbacks=[MyCallback()])
+hist_model = model.fit(x=train_generator, validation_data=validation_generator, epochs=10, callbacks=[MyCallback()])
 
 """Testing on a single image"""
 
