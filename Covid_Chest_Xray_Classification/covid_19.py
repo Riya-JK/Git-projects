@@ -30,7 +30,7 @@ dataset_path = './dataset'
 # mkdir -p dataset/test/covid
 # mkdir -p dataset/test/normal
 
-samples = 10
+samples = 15
 
 covid_dataset_path = './images'
 
@@ -64,7 +64,7 @@ for (i, row) in df.iterrows():
 for (i, row) in df.iterrows():
     # if (1) the current case is not COVID-19 or (2) this is not
     # a 'PA' view, then ignore the row
-    if row["finding"] == "COVID-19" or row["view"] != "PA":
+    if row["finding"] == "COVID-19" or row["finding"] == "COVID-19, ARDS":
         continue
 
     # build the path to the input image file
@@ -152,7 +152,7 @@ plots_from_files(normal_images, rows=5, maintitle="Normal X-ray images")
 import numpy as np
 import tensorflow as tf
 from tensorflow import keras
-from tensorflow.keras.applications import VGG16
+from tensorflow.keras.applications import VGG16, ResNet50
 from keras.preprocessing.image import ImageDataGenerator
 
 """Preprocessing the tarining directory and Validation directory"""
@@ -166,93 +166,65 @@ test_datagen = ImageDataGenerator(rescale=1./255)
 train_generator = train_datagen.flow_from_directory(
         '/content/dataset/train',
         target_size=(224, 224),
-        batch_size=32,
+        batch_size=15,
         class_mode='binary')
 validation_generator = test_datagen.flow_from_directory(
         '/content/dataset/test',
         target_size=(224, 224),
-        batch_size=32,
+        batch_size=15,
         class_mode='binary')
 
-"""Building the CNN"""
+"""Building the ResNet50 Model"""
 
-model = tf.keras.models.Sequential()
-model.add(tf.keras.layers.Conv2D(64, kernel_size=3, activation='relu', input_shape=[224,224,3]))
-model.add(tf.keras.layers.MaxPool2D(pool_size=2, strides=2))
-model.add(tf.keras.layers.Conv2D(64, kernel_size=3, activation='relu'))
-model.add(tf.keras.layers.MaxPool2D(pool_size=2, strides=2))
-model.add(tf.keras.layers.Conv2D(64, kernel_size=3, activation='relu'))
-model.add(tf.keras.layers.MaxPool2D(pool_size=2, strides=2))
-model.add(tf.keras.layers.Flatten())
-model.add(tf.keras.layers.Dense(units=128, activation='relu'))
-model.add(tf.keras.layers.Dense(units=1, activation='sigmoid'))
-model.summary()
-
-"""Building the VGG19 Model"""
-
-from tensorflow.keras.applications.vgg19 import VGG19
+from tensorflow.keras.applications import VGG19, ResNet50
 from tensorflow.keras.models import Model
 from tensorflow.keras.applications.vgg19 import preprocess_input
 
-base_model = VGG19(weights='imagenet',input_tensor=tf.keras.layers.Input(shape=(224,224,3)), include_top=False)
-end_model = base_model.get_layer('block4_pool').output
+base_model = ResNet50(weights='imagenet', input_tensor=tf.keras.layers.Input(shape=(224,224,3)), include_top=False)
+end_model = base_model.output
 end_model = tf.keras.layers.Flatten()(end_model)
 end_model = tf.keras.layers.Dense(units=128, activation='relu')(end_model)
-end_model = tf.keras.layers.Dense(units=1, activation='softmax')(end_model)
-VGG19model = Model(inputs=base_model.input, outputs=end_model)
-VGG19model.summary()
+end_model = tf.keras.layers.Dense(units=1, activation='sigmoid')(end_model)
+ResNetmodel = Model(inputs=base_model.input, outputs=end_model)
+ResNetmodel.summary()
 
 class MyCallback(tf.keras.callbacks.Callback):
 
   def on_epoch_end(self, epoch, logs={}):
-    if logs.get('acc') > 0.80 :
-      print("\n Recahed accuracy above 80% ")
+    if logs.get('acc') > 0.95 :
+      print("\n Recahed accuracy above 90% ")
       self.model.stop_training = True
 
 """Fitting your VGG19 Model"""
 
-VGG19model.compile(optimizer='adam', loss='binary_crossentropy', metrics=['acc'])
-hist = VGG19model.fit(x=train_generator, validation_data=validation_generator, epochs=10, callbacks=[MyCallback()])
+from tensorflow.keras.optimizers import Adam
+INIT_LR = 0.0003
+opt = Adam(lr=INIT_LR)
+ResNetmodel.compile(optimizer=opt, loss='binary_crossentropy', metrics=['acc'])
+hist = ResNetmodel.fit(x=train_generator, validation_data=validation_generator, epochs=10, callbacks=[MyCallback()])
 
-"""Fitting your Model"""
+"""Fitting your Model
 
-model.compile(optimizer='adam', loss='binary_crossentropy', metrics=['acc'])
-hist_model = model.fit(x=train_generator, validation_data=validation_generator, epochs=10, callbacks=[MyCallback()])
-
-"""Testing on a single image"""
+Testing on a single image
+"""
 
 import numpy as np
 from keras.preprocessing import image
 
-test_image = image.load_img('/content/dataset/test/normal/SARS-10.1148rg.242035193-g04mr34g0-Fig8a-day0.jpeg', target_size=(150,150))
+test_image = image.load_img('/content/dataset/train/normal/ARDSSevere.png', target_size=(224,224))
 test_image = image.img_to_array(test_image)
 test_image = np.expand_dims(test_image, axis=0)
-result = model.predict(test_image)
-train_generator.class_indices
+result = ResNetmodel.predict(test_image)
+print(train_generator.class_indices)
 if result[0][0] == 0:
   print("Covid")
 else:
   print("Normal")
 
-"""Visualizing the accuracy curve of the VGG19 Model"""
+"""Visualizing the accuracy curve of the ResNet Model"""
 
 import matplotlib.pyplot as plt
 plt.plot(hist.history["acc"])
-plt.plot(hist.history['val_acc'])
-plt.plot(hist.history['loss'])
-plt.plot(hist.history['val_loss'])
-plt.title("model accuracy")
-plt.ylabel("Accuracy")
-plt.xlabel("Epoch")
-plt.legend(["Accuracy","Validation Accuracy","loss","Validation Loss"])
-plt.show()
-
-"""Visualizing the Simple CNN Model's accuracy curve"""
-
-plt.plot(hist_model.history["acc"])
-plt.plot(hist_model.history['val_acc'])
-plt.plot(hist_model.history['loss'])
-plt.plot(hist_model.history['val_loss'])
 plt.title("model accuracy")
 plt.ylabel("Accuracy")
 plt.xlabel("Epoch")
