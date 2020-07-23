@@ -16,7 +16,7 @@ import matplotlib.pyplot as plt
 """Import the dataset"""
 
 dataset = pd.read_csv("train.csv")
-print(dataset['keyword'].value_counts())
+print(dataset['target'].value_counts())
 
 """Clean the texts"""
 
@@ -51,8 +51,8 @@ X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2)
 
 """Applying our Machine Learning Model onto our Bag of Words Model"""
 
-from xgboost import XGBClassifier
-classifier = XGBClassifier()
+from sklearn.linear_model import LogisticRegression
+classifier = LogisticRegression()
 classifier.fit(X_train, y_train)
 
 """Testing the model against the Test set"""
@@ -89,9 +89,13 @@ for i in range (0,3263):
   corpus.append(tweet)
 
 x_test = cv.transform(corpus).toarray()
-y_pred = classifier.predict(x_test)
+y_test = (classifier.predict(x_test))
+y_pred = []
+for i in y_test:
+  y_pred.append(int(round(i)))
+y_pred = np.array(y_pred)
 print(y_pred)
-rows = (np.concatenate((id.reshape(len(id),1), y_pred.reshape(len(y_pred),1)),1))
+rows = (np.concatenate((id.reshape(len(id),1), y_pred.reshape(len(y_pred), 1)),1))
 
 import csv
 fields = ['id', 'target']
