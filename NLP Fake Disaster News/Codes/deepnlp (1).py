@@ -8,9 +8,7 @@ Original file is located at
 
 Each sample in the train and test set has the following information:
 
-The text of a tweet
-A keyword from that tweet (although this may be blank!)
-The location the tweet was sent from (may also be blank)
+The text of a tweet, a keyword from that tweet (although this may be blank!),the location the tweet was sent from (may also be blank)
 
 Task is to predict whether a given tweet is about a real disaster or not. If so, predict a 1. If not, predict a 0.
 
@@ -47,7 +45,7 @@ for i in range (0,7613):
 """Splitting the corpus into Train and Test sets"""
 
 from sklearn.model_selection import train_test_split
-sentence_train, sentence_test, y_train, y_test = train_test_split(corpus, dataset.iloc[:,-1].values, test_size=0.5)
+sentence_train, sentence_test, y_train, y_test = train_test_split(corpus, dataset.iloc[:,-1].values, test_size=0.1)
 
 """Vectorize the text corpus into a list of integers"""
 
@@ -75,13 +73,15 @@ print(X_train[0, :])
 
 from keras.models import Sequential
 from keras import layers
+from keras.optimizers import Adam
+opt = Adam(lr=0.0004, decay=0.0004/10)
 
 model = Sequential()
 model.add(layers.Embedding(input_dim=vocab_size, output_dim=50, input_length=maxlen))
 model.add(layers.GlobalMaxPooling1D())
 model.add(layers.Dense(10, activation='relu'))
 model.add(layers.Dense(1, activation='sigmoid'))
-model.compile(optimizer='adam',
+model.compile(optimizer=opt,
               loss='binary_crossentropy',
               metrics=['accuracy'])
 model.summary()
